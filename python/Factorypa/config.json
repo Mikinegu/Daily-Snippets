@@ -1,0 +1,45 @@
+{
+    "blackout_days": ["sunday"],
+    "holidays": {
+        "2025-09-11": "Enkutatash (New Year)",
+        "2025-12-25": "Christmas",
+        "2025-04-13": "Palm Sunday",
+        "2025-05-01": "International Workers’ Day"
+    },
+    "monday": {
+        "clock_in": "08:30",
+        "lunch_break": "12:00",
+        "lunch_resume": "13:00",
+        "clock_out": "17:00"
+    },
+    "tuesday": {
+        "clock_in": "08:30",
+        "lunch_break": "12:30",
+        "lunch_resume": "13:30",
+        "clock_out": "17:30"
+    },
+    "wednesday": {
+        "clock_in": "08:30",
+        "lunch_break": "12:00",
+        "lunch_resume": "13:00",
+        "clock_out": "17:00"
+    },
+    "thursday": {
+        "clock_in": "08:30",
+        "lunch_break": "12:30",
+        "lunch_resume": "13:30",
+        "clock_out": "17:30"
+    },
+    "friday": {
+        "clock_in": "08:30",
+        "lunch_break": "12:00",
+        "lunch_resume": "13:00",
+        "clock_out": "17:00"
+    },
+    "saturday": {
+        "clock_in": "09:00",
+        "lunch_break": "13:00",
+        "lunch_resume": "14:00",
+        "clock_out": "18:00"
+    }
+}

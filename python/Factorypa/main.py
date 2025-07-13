@@ -4,6 +4,31 @@ import os
 import schedule 
 import threading
 from datetime import datetime
+import json
+
+with open ("python\Factorypa\config.json", "r") as f:
+    config = json.load(f)
+
+# black out days
+def is_blackout_day():
+    today = datetime.now()
+    day_name = today.strftime("%A").lower()
+    date_str = today.strftime("%Y-%m-%d")
+
+    blackout_days = config.get("blackout_days", [])
+    holidays = config.get("holidays", {})
+
+    if day_name in blackout_days or date_str in holidays:
+        print(f"❌ Today is a blackout day: {day_name} or {date_str}.")
+        return True
+    
+    return False
+
+
+#get to days schedule 
+def get_todays_schedule():
+    today = datetime.now().strftime("%A").lower()
+    return config.get(today, {})
 
 #get playlist for appropriate day
 def get_plalist_for_today():
@@ -11,7 +36,6 @@ def get_plalist_for_today():
     playlist_folder = os.path.join("python\Factorypa\Playlists", today)
     if not os.path.exists(playlist_folder):
         print(f"❌ Playlist for {today} not found.")
-        print({playlist_folder})
         return []
     songs = [f for f in os.listdir(playlist_folder) if f.endswith(".mp3")]
     songs.sort()
@@ -85,11 +109,18 @@ def stop_music():
     print("⏹️ Stopping music playback...")
 
 # Schedule music playback
-schedule.every().day.at("12:39").do(start_music)
-schedule.every().day.at("12:40").do(pause_music)
-schedule.every().day.at("12:41").do(resume_music)
-schedule.every().day.at("12:42").do(stop_music)
 
+if not is_blackout_day():
+    today_schedule = get_todays_schedule()
+    if today_schedule:
+        schedule.every().day.at(today_schedule["clock_in"]).do(start_music)
+        schedule.every().day.at(today_schedule["lunch_break"]).do(pause_music)
+        schedule.every().day.at(today_schedule["lunch_resume"]).do(resume_music)
+        schedule.every().day.at(today_schedule["clock_out"]).do(stop_music)
+    else:
+        print("❌ No schedule found for today.")
+else:
+    print("❌ Skipping music playback due to blackout day.")
 while True:
     schedule.run_pending()
     time.sleep(1)  # Sleep to prevent busy-waiting
