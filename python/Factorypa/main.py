@@ -3,13 +3,20 @@ import time
 import os
 import schedule 
 import threading
+from datetime import datetime
 
-# Define playlist path and get songs 
-playlist_path = "python/Factorypa/Playlists/Monday"
-songs = [f for f in os.listdir(playlist_path) if f.endswith('.mp3')]
-# Sort songs alphabetically
-songs.sort()
-
+#get playlist for appropriate day
+def get_plalist_for_today():
+    today = datetime.now().strftime("%A").lower()
+    playlist_folder = os.path.join("python\Factorypa\Playlists", today)
+    if not os.path.exists(playlist_folder):
+        print(f"❌ Playlist for {today} not found.")
+        print({playlist_folder})
+        return []
+    songs = [f for f in os.listdir(playlist_folder) if f.endswith(".mp3")]
+    songs.sort()
+    full_path = [os.path.join(playlist_folder, s) for s in songs]
+    return full_path
 
 #initialize pygame
 pygame.mixer.init()
@@ -21,10 +28,16 @@ music_thread = None
 def play_playlist():
     global is_playing , is_paused
     print("🎵Starting music playback...")
-    for song in songs:
+    
+    songs = get_plalist_for_today() 
+    if not songs:
+        print("❌ No songs found for today.")
+        return
+    
+    for song_path in songs:
         if not is_playing:
             break
-        song_path = os.path.join(playlist_path, song)
+        
         print(f"Playing: {song_path}")
         # Load and play music
         pygame.mixer.music.load(song_path)
@@ -71,16 +84,11 @@ def stop_music():
     pygame.mixer.music.stop()
     print("⏹️ Stopping music playback...")
 
-schedule.every().day.at("11:45").do(start_music)
-schedule.every().day.at("11:46").do(pause_music)
-schedule.every().day.at("11:47").do(resume_music)
-schedule.every().day.at("11:48").do(stop_music)
-
-def set_playing(state):
-    global is_playing
-    is_playing = state
-    if is_playing:
-        start_music()
+# Schedule music playback
+schedule.every().day.at("12:39").do(start_music)
+schedule.every().day.at("12:40").do(pause_music)
+schedule.every().day.at("12:41").do(resume_music)
+schedule.every().day.at("12:42").do(stop_music)
 
 while True:
     schedule.run_pending()
