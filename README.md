@@ -64,3 +64,52 @@ All schedule and control logic is managed through `config.json`.
     "clock_out": "17:00"
   }
 }
+```
+
+---
+
+### 🗓️ Day 2 — Unscramble Sentence Game (CLI)
+
+---
+
+## 📌 What’s New
+
+In Day 2, we stepped away from the scheduler and built a fun **command-line unscramble-the-sentence game** to keep the challenge dynamic. It scrambles the words of a sentence, and the player types in the correct order to win.
+
+---
+
+## ✅ Features Added
+
+- 🎲 Scrambles a random sentence from a growing bank  
+- ⌨️ Player types in the correct sentence to win  
+- 🧠 **Levenshtein distance** used to score how close the guess is  
+- ⏳ Countdown timer adds pressure  
+- 💡 Hint system reveals one correct word per request  
+- 📈 Difficulty increases with longer/more complex sentences
+
+---
+
+## 🕹️ Example
+
+```
+Scrambled Sentence:
+fox the over dog lazy jumps quick brown the
+
+⏳ Time left: 26 seconds
+Your input: the quick brown fox jumps over the lazy dog
+🎉 Correct! Score: 97
+```
+
+---
+
+## 🧰 Technologies Used
+
+- Python 3 (terminal-based)  
+- `Levenshtein` library for fuzzy scoring  
+- Random + Timer modules for logic
+
+---
+
+> This game keeps your mind sharp while building logic for real apps. Bonus: it's addictive.
+
+---
