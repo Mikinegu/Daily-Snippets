@@ -6,6 +6,7 @@ import threading
 from datetime import datetime
 import json
 
+# Load configuration
 with open ("python\Factorypa\config.json", "r") as f:
     config = json.load(f)
 

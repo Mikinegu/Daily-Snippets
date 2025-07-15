@@ -1,5 +1,5 @@
 {
-    "blackout_days": ["sunday"],
+    "blackout_days": ["monday"],
     "holidays": {
         "2025-09-11": "Enkutatash (New Year)",
         "2025-12-25": "Christmas",
@@ -42,4 +42,5 @@
         "lunch_resume": "14:00",
         "clock_out": "18:00"
     }
+    
 }
