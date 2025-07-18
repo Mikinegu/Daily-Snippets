@@ -20,7 +20,6 @@ def decode_message(message):
             decoded += char
     return decoded
 
-# 🧪 Test it!
 secret = "I love Python"
 encoded = encode_message(secret)
 decoded = decode_message(encoded)
