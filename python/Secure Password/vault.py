@@ -59,6 +59,21 @@ def add_entry(vault):
     save_vault(vault)
     print(f"✅ Credentials for '{site}' saved.")
 
+def search_entries(vault):
+    query = input("🔎 Enter search term (site or username): ").strip().lower()
+    if not query:
+        print("❌ Search term cannot be empty!")
+        return
+    found = False
+    for site, entry in vault.items():
+        if query in site.lower() or query in entry["username"].lower():
+            print(f"\nSite: {site}")
+            print(f"👤 Username: {entry['username']}")
+            print(f"🔑 Password: {decode_password(entry['password'])}")
+            found = True
+    if not found:
+        print("❌ No matching entries found.")
+
 def retrieve_entry(vault):
     site = input("🔍 Enter Site Name to Retrieve: ").strip()
     if site in vault:
@@ -77,8 +92,9 @@ def main():
         print("1. Add New Entry")
         print("2. Retrieve Entry")
         print("3. Generate Password")
-        print("3. Exit")
-        choice = input("Select option (1/2/3/4): ").strip()
+        print("4. Search Entries")
+        print("5. Exit")
+        choice = input("Select option (1/2/3/4/5): ").strip()
 
         if choice == '1':
             add_entry(vault)
@@ -92,6 +108,8 @@ def main():
             pwd = generate_password(length)
             print(f"🔑 Generated Password: {pwd}")
         elif choice == '4':
+            search_entries(vault)
+        elif choice == '5':
             print("🔒 Vault closed. Stay safe!")
             break
         else:
