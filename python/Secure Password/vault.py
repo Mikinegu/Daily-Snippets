@@ -59,6 +59,49 @@ def add_entry(vault):
     save_vault(vault)
     print(f"✅ Credentials for '{site}' saved.")
 
+def update_entry(vault):
+    site = input("✏️ Enter Site Name to Update: ").strip()
+    if site not in vault:
+        print("❌ No credentials found for that site.")
+        return
+    entry = vault[site]
+    print(f"Current Username: {entry['username']}")
+    new_user = input("Enter new username (leave blank to keep current): ").strip()
+    print("1. Keep current password")
+    print("2. Enter new password")
+    print("3. Generate new password")
+    pwd_choice = input("Select option (1/2/3): ").strip()
+    if pwd_choice == '2':
+        new_pwd = input("Enter new password: ").strip()
+    elif pwd_choice == '3':
+        try:
+            length = int(input("Enter password length (default 12): ").strip() or "12")
+        except ValueError:
+            length = 12
+        new_pwd = generate_password(length)
+        print(f"🔑 Generated Password: {new_pwd}")
+    else:
+        new_pwd = decode_password(entry['password'])
+    vault[site] = {
+        "username": new_user if new_user else entry['username'],
+        "password": encode_password(new_pwd)
+    }
+    save_vault(vault)
+    print(f"✅ Credentials for '{site}' updated.")
+
+def delete_entry(vault):
+    site = input("🗑️ Enter Site Name to Delete: ").strip()
+    if site in vault:
+        confirm = input(f"Are you sure you want to delete credentials for '{site}'? (y/n): ").strip().lower()
+        if confirm == 'y':
+            del vault[site]
+            save_vault(vault)
+            print(f"✅ Credentials for '{site}' deleted.")
+        else:
+            print("❌ Deletion cancelled.")
+    else:
+        print("❌ No credentials found for that site.")
+
 def search_entries(vault):
     query = input("🔎 Enter search term (site or username): ").strip().lower()
     if not query:
@@ -93,8 +136,10 @@ def main():
         print("2. Retrieve Entry")
         print("3. Generate Password")
         print("4. Search Entries")
+        print("5. Update Entry")
+        print("6. Delete Entry")
         print("5. Exit")
-        choice = input("Select option (1/2/3/4/5): ").strip()
+        choice = input("Select option (1/2/3/4/5/6/7): ").strip()
 
         if choice == '1':
             add_entry(vault)
@@ -110,6 +155,10 @@ def main():
         elif choice == '4':
             search_entries(vault)
         elif choice == '5':
+            update_entry(vault)
+        elif choice == '6':
+            delete_entry(vault)
+        elif choice == '7':
             print("🔒 Vault closed. Stay safe!")
             break
         else:
