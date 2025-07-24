@@ -32,6 +32,20 @@ def decode_password(encoded):
     except:
         return "[Decoding Failed]"
 
+def password_strength(password):
+    length = len(password)
+    has_lower = any(c.islower() for c in password)
+    has_upper = any(c.isupper() for c in password)
+    has_digit = any(c.isdigit() for c in password)
+    has_special = any(c in string.punctuation for c in password)
+    score = sum([has_lower, has_upper, has_digit, has_special])
+    if length >= 12 and score == 4:
+        return "Strong"
+    elif length >= 8 and score >= 3:
+        return "Medium"
+    else:
+        return "Weak"
+
 def add_entry(vault):
     site = input("🔹 Enter Site Name: ").strip()
     user = input("🔹 Enter Username: ").strip()
@@ -44,9 +58,11 @@ def add_entry(vault):
         except ValueError:
             length = 12
         pwd = generate_password(length)
-        print(f"� Generated Password: {pwd}")
+        print(f"🔑 Generated Password: {pwd}")
     else:
-        pwd = input("�🔹 Enter Password: ").strip()
+        pwd = input(" Enter Password: ").strip()
+
+    print(f"Password Strength: {password_strength(pwd)}")
 
     if not site or not user or not pwd:
         print("❌ Fields cannot be empty!")
@@ -82,6 +98,7 @@ def update_entry(vault):
         print(f"🔑 Generated Password: {new_pwd}")
     else:
         new_pwd = decode_password(entry['password'])
+    print(f"Password Strength: {password_strength(new_pwd)}")
     vault[site] = {
         "username": new_user if new_user else entry['username'],
         "password": encode_password(new_pwd)
