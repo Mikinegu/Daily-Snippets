@@ -1,8 +1,14 @@
 import json
 import base64
 import os
+import random
+import string
 
 VAULT_FILE = "vault.json"
+
+def generate_password(length=12):
+    chars = string.ascii_letters + string.digits + string.punctuation
+    return ''.join(random.choice(chars) for _ in range(length))
 
 def load_vault():
     if os.path.exists(VAULT_FILE):
@@ -29,7 +35,18 @@ def decode_password(encoded):
 def add_entry(vault):
     site = input("🔹 Enter Site Name: ").strip()
     user = input("🔹 Enter Username: ").strip()
-    pwd = input("🔹 Enter Password: ").strip()
+    print("1. Enter password manually")
+    print("2. Generate strong password")
+    pwd_choice = input("Select option (1/2): ").strip()
+    if pwd_choice == '2':
+        try:
+            length = int(input("Enter password length (default 12): ").strip() or "12")
+        except ValueError:
+            length = 12
+        pwd = generate_password(length)
+        print(f"� Generated Password: {pwd}")
+    else:
+        pwd = input("�🔹 Enter Password: ").strip()
 
     if not site or not user or not pwd:
         print("❌ Fields cannot be empty!")
@@ -59,14 +76,22 @@ def main():
         print("\n--- Menu ---")
         print("1. Add New Entry")
         print("2. Retrieve Entry")
+        print("3. Generate Password")
         print("3. Exit")
-        choice = input("Select option (1/2/3): ").strip()
+        choice = input("Select option (1/2/3/4): ").strip()
 
         if choice == '1':
             add_entry(vault)
         elif choice == '2':
             retrieve_entry(vault)
         elif choice == '3':
+            try:
+                length = int(input("Enter password length (default 12): ").strip() or "12")
+            except ValueError:
+                length = 12
+            pwd = generate_password(length)
+            print(f"🔑 Generated Password: {pwd}")
+        elif choice == '4':
             print("🔒 Vault closed. Stay safe!")
             break
         else:
