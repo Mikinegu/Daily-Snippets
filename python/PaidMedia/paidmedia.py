@@ -1,3 +1,20 @@
+# Reverse mapping: emoji to word
+EMOJI_WORD_MAP = {v: k for k, v in WORD_EMOJI_MAP.items()}
+
+def emoji_to_text(text):
+    chars = text.split()
+    return ' '.join(EMOJI_WORD_MAP.get(char, char) for char in chars)
+
+# Command: /text <emojis>
+async def text_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text[len('/text '):]
+    word_text = emoji_to_text(text)
+    await update.message.reply_text(word_text)
+# Command: /emoji <text>
+async def emoji_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text[len('/emoji '):]
+    emoji_text = text_to_emoji(text)
+    await update.message.reply_text(emoji_text)
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 import logging
@@ -27,6 +44,19 @@ WORD_EMOJI_MAP = {
     # Add more mappings as needed
 }
 
+# Reverse mapping: emoji to word
+EMOJI_WORD_MAP = {v: k for k, v in WORD_EMOJI_MAP.items()}
+
+def emoji_to_text(text):
+    chars = text.split()
+    return ' '.join(EMOJI_WORD_MAP.get(char, char) for char in chars)
+
+# Command: /text <emojis>
+async def text_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text[len('/text '):]
+    word_text = emoji_to_text(text)
+    await update.message.reply_text(word_text)
+
 def text_to_emoji(text):
     words = text.split()
     return ' '.join(WORD_EMOJI_MAP.get(word.lower(), word) for word in words)
@@ -49,6 +79,8 @@ def main():
     application = ApplicationBuilder().token('YOUR_BOT_TOKEN').build()
 
     application.add_handler(CommandHandler('start', start))
+    application.add_handler(CommandHandler('emoji', emoji_command))
+    application.add_handler(CommandHandler('text', text_command))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
     print("Emoji Translator Bot is alive! Waiting for messages...")
