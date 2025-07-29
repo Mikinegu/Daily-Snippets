@@ -1,3 +1,24 @@
+import os
+try:
+    from transformers import pipeline
+    nlp = pipeline("sentiment-analysis")
+except ImportError:
+    nlp = None
+
+# Map sentiment to emojis
+SENTIMENT_EMOJI = {
+    "POSITIVE": "😊👍❤️",
+    "NEGATIVE": "😢💔😞",
+    "NEUTRAL": "😐"
+}
+
+def nlp_emoji_suggestion(text):
+    if nlp is None:
+        return "(NLP model not installed) " + text_to_emoji(text)
+    result = nlp(text)
+    label = result[0]["label"].upper()
+    emojis = SENTIMENT_EMOJI.get(label, "😐")
+    return f"{text}\nSuggested emojis: {emojis}"
 # Reverse mapping: emoji to word
 EMOJI_WORD_MAP = {v: k for k, v in WORD_EMOJI_MAP.items()}
 
@@ -71,7 +92,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # Message handler: turns text to emojis
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     input_text = update.message.text
-    emoji_text = text_to_emoji(input_text)
+    # Use NLP-powered suggestion
+    emoji_text = nlp_emoji_suggestion(input_text)
     await update.message.reply_text(emoji_text)
 
 def main():
