@@ -69,6 +69,16 @@ QUOTES = [
     "Don’t watch the clock; do what it does. Keep going. – Sam Levenson",
     "Great things never come from comfort zones.",
     "Push yourself, because no one else is going to do it for you."
+    ,"Opportunities don't happen, you create them. – Chris Grosser"
+    ,"Success is not the key to happiness. Happiness is the key to success. – Albert Schweitzer"
+    ,"The only place where success comes before work is in the dictionary. – Vidal Sassoon"
+    ,"Don’t be afraid to give up the good to go for the great. – John D. Rockefeller"
+    ,"I find that the harder I work, the more luck I seem to have. – Thomas Jefferson"
+    ,"Success usually comes to those who are too busy to be looking for it. – Henry David Thoreau"
+    ,"The way to get started is to quit talking and begin doing. – Walt Disney"
+    ,"Don’t let what you cannot do interfere with what you can do. – John Wooden"
+    ,"The future depends on what you do today. – Mahatma Gandhi"
+    ,"It always seems impossible until it’s done. – Nelson Mandela"
 ]
 
 def get_random_quote():
