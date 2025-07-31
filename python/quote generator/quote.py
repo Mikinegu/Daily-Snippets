@@ -1,8 +1,24 @@
+# Store user-added quotes in a dict by user id
+USER_QUOTES = {}
+
+# Command: /myquotes
+async def my_quotes(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    quotes = USER_QUOTES.get(user_id, [])
+    if quotes:
+        await update.message.reply_text("Your quotes:\n" + '\n'.join(quotes))
+    else:
+        await update.message.reply_text("You haven't added any quotes yet.")
+# Command: /countquotes
+async def count_quotes(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(f"There are {len(QUOTES)} quotes available.")
 # Command: /addquote <your quote>
 async def add_quote(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text[len('/addquote '):].strip()
     if text:
         QUOTES.append(text)
+        user_id = update.effective_user.id
+        USER_QUOTES.setdefault(user_id, []).append(text)
         await update.message.reply_text("Quote added!")
     else:
         await update.message.reply_text("Please provide a quote after /addquote.")
@@ -48,6 +64,8 @@ def main():
     application.add_handler(CommandHandler('start', start))
     application.add_handler(CommandHandler('quote', quote))
     application.add_handler(CommandHandler('addquote', add_quote))
+    application.add_handler(CommandHandler('countquotes', count_quotes))
+    application.add_handler(CommandHandler('myquotes', my_quotes))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
     print("Quote Generator Bot is alive! Waiting for messages...")
