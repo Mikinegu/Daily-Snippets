@@ -1,3 +1,11 @@
+# Command: /addquote <your quote>
+async def add_quote(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text[len('/addquote '):].strip()
+    if text:
+        QUOTES.append(text)
+        await update.message.reply_text("Quote added!")
+    else:
+        await update.message.reply_text("Please provide a quote after /addquote.")
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 import random
@@ -39,6 +47,7 @@ def main():
 
     application.add_handler(CommandHandler('start', start))
     application.add_handler(CommandHandler('quote', quote))
+    application.add_handler(CommandHandler('addquote', add_quote))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
     print("Quote Generator Bot is alive! Waiting for messages...")
