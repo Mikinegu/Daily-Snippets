@@ -406,6 +406,287 @@ Best regards,
         
         return sorted(backups, key=lambda x: x['created_at'], reverse=True)
     
+    def analyze_template_performance(self, template_name: str) -> Dict:
+        """Analyze performance metrics for a specific template"""
+        if not self.sent_emails:
+            return {'error': 'No sent emails to analyze'}
+        
+        template_emails = [email for email in self.sent_emails 
+                          if email['template_name'] == template_name]
+        
+        if not template_emails:
+            return {'error': f'No emails sent using template "{template_name}"'}
+        
+        # Basic metrics
+        total_sent = len(template_emails)
+        unique_recipients = len(set(email['recipient'] for email in template_emails))
+        
+        # Time analysis
+        sent_dates = [datetime.fromisoformat(email['sent_at']) for email in template_emails]
+        first_sent = min(sent_dates)
+        last_sent = max(sent_dates)
+        days_active = (last_sent - first_sent).days + 1
+        
+        # Frequency analysis
+        daily_sends = {}
+        for date in sent_dates:
+            date_str = date.strftime('%Y-%m-%d')
+            daily_sends[date_str] = daily_sends.get(date_str, 0) + 1
+        
+        avg_daily_sends = sum(daily_sends.values()) / len(daily_sends) if daily_sends else 0
+        max_daily_sends = max(daily_sends.values()) if daily_sends else 0
+        
+        # Variable usage analysis
+        variable_usage = {}
+        for email in template_emails:
+            for var, value in email.get('variables', {}).items():
+                if var not in variable_usage:
+                    variable_usage[var] = {'count': 0, 'values': set()}
+                variable_usage[var]['count'] += 1
+                variable_usage[var]['values'].add(value)
+        
+        # Convert sets to lists for JSON serialization
+        for var in variable_usage:
+            variable_usage[var]['values'] = list(variable_usage[var]['values'])
+        
+        return {
+            'template_name': template_name,
+            'total_sent': total_sent,
+            'unique_recipients': unique_recipients,
+            'first_sent': first_sent.isoformat(),
+            'last_sent': last_sent.isoformat(),
+            'days_active': days_active,
+            'avg_daily_sends': round(avg_daily_sends, 2),
+            'max_daily_sends': max_daily_sends,
+            'variable_usage': variable_usage,
+            'daily_send_pattern': daily_sends
+        }
+    
+    def get_template_engagement_score(self, template_name: str) -> Dict:
+        """Calculate engagement score for a template based on various factors"""
+        template = self.get_template(template_name)
+        if not template:
+            return {'error': 'Template not found'}
+        
+        score = 0
+        factors = {}
+        
+        # Length analysis
+        subject_length = len(template['subject'])
+        body_length = len(template['body'])
+        
+        if 30 <= subject_length <= 60:
+            score += 20
+            factors['subject_length'] = 'Optimal (30-60 chars)'
+        elif 20 <= subject_length <= 80:
+            score += 15
+            factors['subject_length'] = 'Good (20-80 chars)'
+        else:
+            factors['subject_length'] = 'Could be optimized'
+        
+        if 100 <= body_length <= 300:
+            score += 25
+            factors['body_length'] = 'Optimal (100-300 chars)'
+        elif 50 <= body_length <= 500:
+            score += 20
+            factors['body_length'] = 'Good (50-500 chars)'
+        else:
+            factors['body_length'] = 'Could be optimized'
+        
+        # Variable analysis
+        variable_count = len(template['variables'])
+        if 3 <= variable_count <= 7:
+            score += 20
+            factors['variables'] = f'Good balance ({variable_count} variables)'
+        elif variable_count < 3:
+            score += 10
+            factors['variables'] = f'Low personalization ({variable_count} variables)'
+        else:
+            factors['variables'] = f'High complexity ({variable_count} variables)'
+        
+        # Content analysis
+        content_score = 0
+        
+        # Check for call-to-action
+        cta_words = ['click', 'visit', 'call', 'email', 'contact', 'schedule', 'book', 'register']
+        if any(word in template['body'].lower() for word in cta_words):
+            content_score += 15
+            factors['call_to_action'] = 'Present'
+        else:
+            factors['call_to_action'] = 'Missing'
+        
+        # Check for questions
+        if '?' in template['body']:
+            content_score += 10
+            factors['questions'] = 'Present'
+        else:
+            factors['questions'] = 'Missing'
+        
+        # Check for personalization
+        personal_words = ['you', 'your', 'name', 'company']
+        personal_count = sum(1 for word in personal_words if word in template['body'].lower())
+        if personal_count >= 2:
+            content_score += 10
+            factors['personalization'] = 'Good'
+        else:
+            factors['personalization'] = 'Could be improved'
+        
+        score += content_score
+        
+        # Category bonus
+        category = template.get('category', 'custom')
+        if category in ['business', 'marketing']:
+            score += 5
+            factors['category'] = f'Professional category ({category})'
+        else:
+            factors['category'] = f'Category: {category}'
+        
+        return {
+            'template_name': template_name,
+            'overall_score': min(score, 100),
+            'factors': factors,
+            'recommendations': self._generate_template_recommendations(factors)
+        }
+    
+    def _generate_template_recommendations(self, factors: Dict) -> List[str]:
+        """Generate recommendations based on template analysis factors"""
+        recommendations = []
+        
+        if factors.get('subject_length') == 'Could be optimized':
+            recommendations.append("Consider optimizing subject line length (30-60 characters ideal)")
+        
+        if factors.get('body_length') == 'Could be optimized':
+            recommendations.append("Email body length could be optimized (100-300 characters ideal)")
+        
+        if factors.get('call_to_action') == 'Missing':
+            recommendations.append("Add a clear call-to-action to improve engagement")
+        
+        if factors.get('questions') == 'Missing':
+            recommendations.append("Consider adding questions to encourage responses")
+        
+        if factors.get('personalization') == 'Could be improved':
+            recommendations.append("Increase personalization by using more 'you' and 'your' references")
+        
+        if 'variables' in factors and 'Low personalization' in factors['variables']:
+            recommendations.append("Consider adding more variables for better personalization")
+        
+        if 'variables' in factors and 'High complexity' in factors['variables']:
+            recommendations.append("Consider reducing variables to simplify template usage")
+        
+        return recommendations
+    
+    def get_trending_templates(self, days: int = 30) -> List[Dict]:
+        """Get templates that are trending in usage"""
+        if not self.sent_emails:
+            return []
+        
+        cutoff_date = datetime.now() - timedelta(days=days)
+        recent_emails = [email for email in self.sent_emails 
+                        if datetime.fromisoformat(email['sent_at']) >= cutoff_date]
+        
+        template_counts = {}
+        for email in recent_emails:
+            template = email['template_name']
+            template_counts[template] = template_counts.get(template, 0) + 1
+        
+        trending = []
+        for template, count in template_counts.items():
+            # Get historical data for comparison
+            all_template_emails = [email for email in self.sent_emails 
+                                 if email['template_name'] == template]
+            
+            if len(all_template_emails) > count:  # Has historical data
+                historical_avg = len(all_template_emails) / (len(self.sent_emails) / len(template_counts))
+                growth_rate = (count / days) / (historical_avg / 30) if historical_avg > 0 else 0
+            else:
+                growth_rate = 1.0  # New template
+            
+            trending.append({
+                'template_name': template,
+                'recent_usage': count,
+                'growth_rate': round(growth_rate, 2),
+                'days_analyzed': days
+            })
+        
+        return sorted(trending, key=lambda x: x['recent_usage'], reverse=True)
+    
+    def generate_performance_report(self) -> str:
+        """Generate a comprehensive performance report"""
+        if not self.sent_emails:
+            return "No email data available for performance analysis."
+        
+        report = []
+        report.append("=" * 70)
+        report.append("EMAIL TEMPLATE PERFORMANCE ANALYTICS REPORT")
+        report.append("=" * 70)
+        report.append(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        report.append("")
+        
+        # Overall statistics
+        total_emails = len(self.sent_emails)
+        unique_templates = len(set(email['template_name'] for email in self.sent_emails))
+        unique_recipients = len(set(email['recipient'] for email in self.sent_emails))
+        
+        report.append("📊 OVERALL STATISTICS")
+        report.append(f"Total emails sent: {total_emails}")
+        report.append(f"Unique templates used: {unique_templates}")
+        report.append(f"Unique recipients: {unique_recipients}")
+        report.append(f"Average emails per template: {total_emails/unique_templates:.1f}")
+        report.append("")
+        
+        # Top performing templates
+        template_usage = {}
+        for email in self.sent_emails:
+            template = email['template_name']
+            template_usage[template] = template_usage.get(template, 0) + 1
+        
+        top_templates = sorted(template_usage.items(), key=lambda x: x[1], reverse=True)[:5]
+        report.append("🏆 TOP PERFORMING TEMPLATES")
+        for i, (template, count) in enumerate(top_templates, 1):
+            percentage = (count / total_emails) * 100
+            report.append(f"{i}. {template}: {count} emails ({percentage:.1f}%)")
+        report.append("")
+        
+        # Trending templates
+        trending = self.get_trending_templates(30)
+        if trending:
+            report.append("📈 TRENDING TEMPLATES (Last 30 days)")
+            for i, trend in enumerate(trending[:5], 1):
+                report.append(f"{i}. {trend['template_name']}: {trend['recent_usage']} emails")
+                if trend['growth_rate'] > 1.5:
+                    report.append(f"   ⬆️  High growth rate: {trend['growth_rate']}x")
+        report.append("")
+        
+        # Template engagement scores
+        report.append("🎯 TEMPLATE ENGAGEMENT SCORES")
+        for template_name in template_usage.keys():
+            engagement = self.get_template_engagement_score(template_name)
+            if 'error' not in engagement:
+                score = engagement['overall_score']
+                status = "🟢 Excellent" if score >= 80 else "🟡 Good" if score >= 60 else "🔴 Needs Improvement"
+                report.append(f"{template_name}: {score}/100 {status}")
+        report.append("")
+        
+        # Recommendations
+        report.append("💡 TOP RECOMMENDATIONS")
+        all_recommendations = []
+        for template_name in template_usage.keys():
+            engagement = self.get_template_engagement_score(template_name)
+            if 'error' not in engagement:
+                all_recommendations.extend(engagement['recommendations'])
+        
+        # Get unique recommendations and count frequency
+        rec_counts = {}
+        for rec in all_recommendations:
+            rec_counts[rec] = rec_counts.get(rec, 0) + 1
+        
+        top_recs = sorted(rec_counts.items(), key=lambda x: x[1], reverse=True)[:5]
+        for i, (rec, count) in enumerate(top_recs, 1):
+            report.append(f"{i}. {rec} (applies to {count} templates)")
+        
+        report.append("=" * 70)
+        return "\n".join(report)
+    
     def add_contact(self, name: str, email: str, company: str = '', notes: str = ''):
         """Add a new contact"""
         self.contacts[name] = {
@@ -578,9 +859,10 @@ def main():
         print("7. Generate report")
         print("8. Duplicate & Version Templates")
         print("9. Import/Export & Backup")
-        print("10. Exit")
+        print("10. Analytics & Performance")
+        print("11. Exit")
         
-        choice = input("\nEnter your choice (1-10): ").strip()
+        choice = input("\nEnter your choice (1-11): ").strip()
         
         if choice == '1':
             print("\n📝 Creating new email template")
@@ -988,6 +1270,120 @@ def main():
                     print()
         
         elif choice == '10':
+            print("\n📊 Analytics & Performance Tracking")
+            print("1. Analyze template performance")
+            print("2. Get template engagement score")
+            print("3. View trending templates")
+            print("4. Generate performance report")
+            print("5. Back to main menu")
+            
+            analytics_choice = input("Choose option: ").strip()
+            
+            if analytics_choice == '1':
+                templates = manager.list_templates()
+                if not templates:
+                    print("❌ No templates available!")
+                    continue
+                
+                print("\n📝 Available templates:")
+                for i, template_name in enumerate(templates, 1):
+                    template = manager.get_template(template_name)
+                    print(f"{i}. {template_name} ({template.get('category', 'custom')})")
+                
+                template_choice = input("\nChoose template to analyze: ").strip()
+                if not template_choice.isdigit() or not (1 <= int(template_choice) <= len(templates)):
+                    print("❌ Invalid choice!")
+                    continue
+                
+                template_name = templates[int(template_choice) - 1]
+                performance = manager.analyze_template_performance(template_name)
+                
+                if 'error' in performance:
+                    print(f"❌ {performance['error']}")
+                else:
+                    print(f"\n📊 Performance Analysis for '{template_name}':")
+                    print(f"  Total emails sent: {performance['total_sent']}")
+                    print(f"  Unique recipients: {performance['unique_recipients']}")
+                    print(f"  Days active: {performance['days_active']}")
+                    print(f"  Average daily sends: {performance['avg_daily_sends']}")
+                    print(f"  Maximum daily sends: {performance['max_daily_sends']}")
+                    
+                    if performance['variable_usage']:
+                        print(f"\n  Variable Usage:")
+                        for var, data in performance['variable_usage'].items():
+                            print(f"    {var}: {data['count']} times ({len(data['values'])} unique values)")
+            
+            elif analytics_choice == '2':
+                templates = manager.list_templates()
+                if not templates:
+                    print("❌ No templates available!")
+                    continue
+                
+                print("\n📝 Available templates:")
+                for i, template_name in enumerate(templates, 1):
+                    template = manager.get_template(template_name)
+                    print(f"{i}. {template_name} ({template.get('category', 'custom')})")
+                
+                template_choice = input("\nChoose template for engagement analysis: ").strip()
+                if not template_choice.isdigit() or not (1 <= int(template_choice) <= len(templates)):
+                    print("❌ Invalid choice!")
+                    continue
+                
+                template_name = templates[int(template_choice) - 1]
+                engagement = manager.get_template_engagement_score(template_name)
+                
+                if 'error' in engagement:
+                    print(f"❌ {engagement['error']}")
+                else:
+                    print(f"\n🎯 Engagement Analysis for '{template_name}':")
+                    print(f"  Overall Score: {engagement['overall_score']}/100")
+                    
+                    score = engagement['overall_score']
+                    if score >= 80:
+                        print("  Status: 🟢 Excellent")
+                    elif score >= 60:
+                        print("  Status: 🟡 Good")
+                    else:
+                        print("  Status: 🔴 Needs Improvement")
+                    
+                    print(f"\n  Analysis Factors:")
+                    for factor, status in engagement['factors'].items():
+                        print(f"    {factor.replace('_', ' ').title()}: {status}")
+                    
+                    if engagement['recommendations']:
+                        print(f"\n  💡 Recommendations:")
+                        for i, rec in enumerate(engagement['recommendations'], 1):
+                            print(f"    {i}. {rec}")
+            
+            elif analytics_choice == '3':
+                print("\n📈 Trending Templates Analysis")
+                days = input("Analyze last N days (default: 30): ").strip()
+                days = int(days) if days.isdigit() else 30
+                
+                trending = manager.get_trending_templates(days)
+                
+                if not trending:
+                    print(f"❌ No email data available for the last {days} days!")
+                    continue
+                
+                print(f"\n📈 Trending Templates (Last {days} days):")
+                for i, trend in enumerate(trending, 1):
+                    print(f"{i}. {trend['template_name']}")
+                    print(f"   Recent usage: {trend['recent_usage']} emails")
+                    print(f"   Growth rate: {trend['growth_rate']}x")
+                    
+                    if trend['growth_rate'] > 1.5:
+                        print(f"   ⬆️  High growth trend!")
+                    elif trend['growth_rate'] < 0.5:
+                        print(f"   ⬇️  Declining usage")
+                    print()
+            
+            elif analytics_choice == '4':
+                print("\n📊 Generating Performance Report...")
+                report = manager.generate_performance_report()
+                print("\n" + report)
+        
+        elif choice == '11':
             print("👋 Thanks for using Email Template Manager!")
             break
         
