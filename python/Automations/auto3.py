@@ -5,13 +5,24 @@ from datetime import datetime, timedelta
 from pathlib import Path
 import logging
 import random
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
+from collections import defaultdict
+import shutil
+import zipfile
+import threading
+import time
 
 class EmailTemplateManager:
-    def __init__(self):
-        self.templates_file = Path('email_templates.json')
-        self.sent_emails_file = Path('sent_emails.json')
-        self.contacts_file = Path('contacts.json')
+    def __init__(self, data_dir: str = "email_data"):
+        self.data_dir = Path(data_dir)
+        self.data_dir.mkdir(exist_ok=True)
+        
+        # File paths
+        self.templates_file = self.data_dir / "email_templates.json"
+        self.contacts_file = self.data_dir / "contacts.json"
+        self.sent_emails_file = self.data_dir / "sent_emails.json"
+        self.scheduled_emails_file = self.data_dir / "scheduled_emails.json"
+        self.reminders_file = self.data_dir / "reminders.json"
         
         # Default email templates
         self.default_templates = {
@@ -104,21 +115,27 @@ Best regards,
             }
         }
         
+        # Initialize data
+        self.templates = self.load_templates()
+        self.contacts = self.load_contacts()
+        self.sent_emails = self.load_sent_emails()
+        self.scheduled_emails = self.load_scheduled_emails()
+        self.reminders = self.load_reminders()
+        
         # Setup logging
         logging.basicConfig(
             level=logging.INFO,
             format='%(asctime)s - %(levelname)s - %(message)s',
             handlers=[
-                logging.FileHandler('email_manager.log'),
+                logging.FileHandler(self.data_dir / "email_manager.log"),
                 logging.StreamHandler()
             ]
         )
         self.logger = logging.getLogger(__name__)
         
-        # Load data
-        self.templates = self.load_templates()
-        self.contacts = self.load_contacts()
-        self.sent_emails = self.load_sent_emails()
+        # Start reminder checker thread
+        self.reminder_thread = threading.Thread(target=self._check_reminders_loop, daemon=True)
+        self.reminder_thread.start()
     
     def load_templates(self) -> Dict:
         """Load templates from file or create default ones"""
@@ -706,17 +723,17 @@ Best regards,
         """List all contacts"""
         return list(self.contacts.keys())
     
-    def generate_email(self, template_name: str, variables: Dict[str, str]) -> Dict:
+    def generate_email(self, template_name: str, recipient_email: str, subject: str, body: str) -> Dict:
         """Generate an email using a template and variables"""
         template = self.get_template(template_name)
         if not template:
             raise ValueError(f"Template '{template_name}' not found")
         
-        subject = template['subject']
-        body = template['body']
-        
         # Replace variables in subject and body
-        for var, value in variables.items():
+        subject = subject.replace('{recipient_email}', recipient_email)
+        body = body.replace('{recipient_email}', recipient_email)
+        
+        for var, value in template['variables'].items():
             subject = subject.replace(f'{{{var}}}', str(value))
             body = body.replace(f'{{{var}}}', str(value))
         
@@ -724,22 +741,22 @@ Best regards,
             'template_name': template_name,
             'subject': subject,
             'body': body,
-            'variables': variables,
+            'recipient_email': recipient_email,
             'generated_at': datetime.now().isoformat()
         }
     
-    def record_sent_email(self, email_data: Dict, recipient: str):
+    def record_sent_email(self, template_name: str, recipient_email: str, subject: str, body: str):
         """Record a sent email"""
-        sent_email = {
-            'template_name': email_data['template_name'],
-            'subject': email_data['subject'],
-            'recipient': recipient,
-            'sent_at': datetime.now().isoformat(),
-            'variables': email_data.get('variables', {})
+        email_data = {
+            'template_name': template_name,
+            'recipient_email': recipient_email,
+            'subject': subject,
+            'body': body,
+            'sent_at': datetime.now().isoformat()
         }
-        self.sent_emails.append(sent_email)
+        self.sent_emails.append(email_data)
         self.save_sent_emails()
-        self.logger.info(f"Recorded sent email to: {recipient}")
+        self.logger.info(f"Recorded sent email to: {recipient_email}")
     
     def get_email_statistics(self) -> Dict:
         """Get statistics about sent emails"""
@@ -793,53 +810,271 @@ Best regards,
         """Basic email validation"""
         pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
         return re.match(pattern, email) is not None
-    
-    def generate_report(self) -> str:
-        """Generate a comprehensive report"""
-        stats = self.get_email_statistics()
+
+    def load_scheduled_emails(self) -> Dict:
+        """Load scheduled emails from file"""
+        if self.scheduled_emails_file.exists():
+            try:
+                with open(self.scheduled_emails_file, 'r') as f:
+                    return json.load(f)
+            except json.JSONDecodeError:
+                self.logger.error("Error loading scheduled emails file")
+        return {}
+
+    def save_scheduled_emails(self):
+        """Save scheduled emails to file"""
+        with open(self.scheduled_emails_file, 'w') as f:
+            json.dump(self.scheduled_emails, f, indent=2)
+
+    def load_reminders(self) -> Dict:
+        """Load reminders from file"""
+        if self.reminders_file.exists():
+            try:
+                with open(self.reminders_file, 'r') as f:
+                    return json.load(f)
+            except json.JSONDecodeError:
+                self.logger.error("Error loading reminders file")
+        return {}
+
+    def save_reminders(self):
+        """Save reminders to file"""
+        with open(self.reminders_file, 'w') as f:
+            json.dump(self.reminders, f, indent=2)
+
+    def schedule_email(self, template_name: str, recipient_email: str, 
+                      scheduled_time: str, subject: str = None, 
+                      custom_message: str = None, reminder_hours: int = 24) -> bool:
+        """Schedule an email for future delivery"""
+        template = self.get_template(template_name)
+        if not template:
+            self.logger.error(f"Template '{template_name}' not found")
+            return False
         
-        report = []
-        report.append("=" * 60)
-        report.append("EMAIL TEMPLATE MANAGER REPORT")
-        report.append("=" * 60)
-        report.append(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        report.append("")
+        try:
+            scheduled_dt = datetime.fromisoformat(scheduled_time)
+            if scheduled_dt <= datetime.now():
+                self.logger.error("Scheduled time must be in the future")
+                return False
+        except ValueError:
+            self.logger.error("Invalid date format. Use ISO format (YYYY-MM-DDTHH:MM:SS)")
+            return False
         
-        # Template statistics
-        report.append(f"Total templates: {len(self.templates)}")
-        report.append(f"Total contacts: {len(self.contacts)}")
-        report.append(f"Total emails sent: {stats['total_sent']}")
+        email_id = f"email_{len(self.scheduled_emails) + 1}_{int(time.time())}"
         
-        # Template categories
-        categories = {}
-        for template in self.templates.values():
-            cat = template.get('category', 'uncategorized')
-            categories[cat] = categories.get(cat, 0) + 1
+        scheduled_email = {
+            'id': email_id,
+            'template_name': template_name,
+            'recipient_email': recipient_email,
+            'subject': subject or template['subject'],
+            'custom_message': custom_message,
+            'scheduled_time': scheduled_time,
+            'status': 'scheduled',
+            'created_at': datetime.now().isoformat(),
+            'reminder_hours': reminder_hours
+        }
         
-        report.append("")
-        report.append("Template Categories:")
-        for cat, count in categories.items():
-            report.append(f"  {cat.title()}: {count} templates")
+        self.scheduled_emails[email_id] = scheduled_email
         
-        # Most used templates
-        if stats['templates_used']:
-            report.append("")
-            report.append("Most Used Templates:")
-            sorted_templates = sorted(stats['templates_used'].items(), 
-                                    key=lambda x: x[1], reverse=True)
-            for template, count in sorted_templates[:5]:
-                report.append(f"  {template}: {count} times")
+        # Set reminder
+        reminder_time = scheduled_dt - timedelta(hours=reminder_hours)
+        if reminder_time > datetime.now():
+            self.reminders[email_id] = {
+                'email_id': email_id,
+                'reminder_time': reminder_time.isoformat(),
+                'message': f"Reminder: Email to {recipient_email} scheduled for {scheduled_time}"
+            }
         
-        # Recent activity
-        if stats['recent_activity']:
-            report.append("")
-            report.append("Recent Activity:")
-            for email in stats['recent_activity'][:5]:
-                sent_date = datetime.fromisoformat(email['sent_at']).strftime('%Y-%m-%d %H:%M')
-                report.append(f"  {sent_date} - {email['subject'][:40]}... to {email['recipient']}")
+        self.save_scheduled_emails()
+        self.save_reminders()
+        self.logger.info(f"Scheduled email '{email_id}' for {scheduled_time}")
+        return True
+
+    def get_scheduled_emails(self, status: str = None) -> List[Dict]:
+        """Get all scheduled emails, optionally filtered by status"""
+        emails = list(self.scheduled_emails.values())
+        if status:
+            emails = [email for email in emails if email['status'] == status]
+        return sorted(emails, key=lambda x: x['scheduled_time'])
+
+    def cancel_scheduled_email(self, email_id: str) -> bool:
+        """Cancel a scheduled email"""
+        if email_id in self.scheduled_emails:
+            self.scheduled_emails[email_id]['status'] = 'cancelled'
+            self.save_scheduled_emails()
+            
+            # Remove reminder if exists
+            if email_id in self.reminders:
+                del self.reminders[email_id]
+                self.save_reminders()
+            
+            self.logger.info(f"Cancelled scheduled email '{email_id}'")
+            return True
+        return False
+
+    def reschedule_email(self, email_id: str, new_time: str) -> bool:
+        """Reschedule an email to a new time"""
+        if email_id not in self.scheduled_emails:
+            return False
         
-        report.append("=" * 60)
-        return "\n".join(report)
+        try:
+            new_dt = datetime.fromisoformat(new_time)
+            if new_dt <= datetime.now():
+                self.logger.error("New scheduled time must be in the future")
+                return False
+        except ValueError:
+            self.logger.error("Invalid date format. Use ISO format (YYYY-MM-DDTHH:MM:SS)")
+            return False
+        
+        email = self.scheduled_emails[email_id]
+        email['scheduled_time'] = new_time
+        email['status'] = 'scheduled'
+        
+        # Update reminder
+        reminder_time = new_dt - timedelta(hours=email.get('reminder_hours', 24))
+        if reminder_time > datetime.now():
+            self.reminders[email_id] = {
+                'email_id': email_id,
+                'reminder_time': reminder_time.isoformat(),
+                'message': f"Reminder: Email to {email['recipient_email']} scheduled for {new_time}"
+            }
+        elif email_id in self.reminders:
+            del self.reminders[email_id]
+        
+        self.save_scheduled_emails()
+        self.save_reminders()
+        self.logger.info(f"Rescheduled email '{email_id}' to {new_time}")
+        return True
+
+    def get_due_emails(self) -> List[Dict]:
+        """Get emails that are due for sending"""
+        now = datetime.now()
+        due_emails = []
+        
+        for email_id, email in self.scheduled_emails.items():
+            if email['status'] == 'scheduled':
+                scheduled_time = datetime.fromisoformat(email['scheduled_time'])
+                if scheduled_time <= now:
+                    due_emails.append(email)
+        
+        return due_emails
+
+    def send_due_emails(self) -> List[str]:
+        """Send all due emails and return list of sent email IDs"""
+        due_emails = self.get_due_emails()
+        sent_ids = []
+        
+        for email in due_emails:
+            try:
+                # Generate and send the email
+                generated_email = self.generate_email(
+                    email['template_name'],
+                    email['recipient_email'],
+                    email['subject'],
+                    email.get('custom_message')
+                )
+                
+                if generated_email:
+                    # Record as sent
+                    self.record_sent_email(
+                        email['template_name'],
+                        email['recipient_email'],
+                        email['subject'],
+                        generated_email['body'] # Use generated_email['body']
+                    )
+                    
+                    # Update status
+                    email['status'] = 'sent'
+                    email['sent_at'] = datetime.now().isoformat()
+                    sent_ids.append(email['id'])
+                    
+                    self.logger.info(f"Sent scheduled email '{email['id']}' to {email['recipient_email']}")
+                
+            except Exception as e:
+                self.logger.error(f"Error sending scheduled email '{email['id']}': {e}")
+                email['status'] = 'failed'
+                email['error'] = str(e)
+        
+        self.save_scheduled_emails()
+        return sent_ids
+
+    def get_upcoming_reminders(self, hours: int = 24) -> List[Dict]:
+        """Get reminders that are due within the specified hours"""
+        now = datetime.now()
+        cutoff_time = now + timedelta(hours=hours)
+        upcoming = []
+        
+        for reminder_id, reminder in self.reminders.items():
+            reminder_time = datetime.fromisoformat(reminder['reminder_time'])
+            if now <= reminder_time <= cutoff_time:
+                upcoming.append(reminder)
+        
+        return sorted(upcoming, key=lambda x: x['reminder_time'])
+
+    def _check_reminders_loop(self):
+        """Background thread to check for due reminders"""
+        while True:
+            try:
+                upcoming_reminders = self.get_upcoming_reminders(1)  # Check next hour
+                for reminder in upcoming_reminders:
+                    self.logger.info(f"REMINDER: {reminder['message']}")
+                
+                # Send due emails
+                sent_emails = self.send_due_emails()
+                if sent_emails:
+                    self.logger.info(f"Sent {len(sent_emails)} due emails")
+                
+                time.sleep(300)  # Check every 5 minutes
+                
+            except Exception as e:
+                self.logger.error(f"Error in reminder checker: {e}")
+                time.sleep(600)  # Wait 10 minutes on error
+
+    def get_scheduling_statistics(self) -> Dict:
+        """Get statistics about scheduled emails"""
+        total_scheduled = len(self.scheduled_emails)
+        status_counts = defaultdict(int)
+        
+        for email in self.scheduled_emails.values():
+            status_counts[email['status']] += 1
+        
+        upcoming_count = len([e for e in self.scheduled_emails.values() 
+                            if e['status'] == 'scheduled' and 
+                            datetime.fromisoformat(e['scheduled_time']) > datetime.now()])
+        
+        return {
+            'total_scheduled': total_scheduled,
+            'status_breakdown': dict(status_counts),
+            'upcoming_emails': upcoming_count,
+            'active_reminders': len(self.reminders)
+        }
+
+    def generate_scheduling_report(self) -> str:
+        """Generate a comprehensive scheduling report"""
+        stats = self.get_scheduling_statistics()
+        due_emails = self.get_due_emails()
+        upcoming_reminders = self.get_upcoming_reminders(24)
+        
+        report = f"""
+=== EMAIL SCHEDULING REPORT ===
+Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+STATISTICS:
+- Total Scheduled Emails: {stats['total_scheduled']}
+- Status Breakdown: {stats['status_breakdown']}
+- Upcoming Emails: {stats['upcoming_emails']}
+- Active Reminders: {stats['active_reminders']}
+
+DUE EMAILS ({len(due_emails)}):
+"""
+        
+        for email in due_emails:
+            report += f"- {email['id']}: {email['recipient_email']} ({email['scheduled_time']})\n"
+        
+        report += f"\nUPCOMING REMINDERS ({len(upcoming_reminders)}):\n"
+        for reminder in upcoming_reminders:
+            report += f"- {reminder['message']} ({reminder['reminder_time']})\n"
+        
+        return report
 
 def main():
     """Main function to run the email template manager"""
@@ -860,9 +1095,10 @@ def main():
         print("8. Duplicate & Version Templates")
         print("9. Import/Export & Backup")
         print("10. Analytics & Performance")
-        print("11. Exit")
+        print("11. Email Scheduling")
+        print("12. Exit")
         
-        choice = input("\nEnter your choice (1-11): ").strip()
+        choice = input("\nEnter your choice (1-12): ").strip()
         
         if choice == '1':
             print("\n📝 Creating new email template")
@@ -928,7 +1164,7 @@ def main():
                 variables[var] = value
             
             try:
-                email = manager.generate_email(template_name, variables)
+                email = manager.generate_email(template_name, "test@example.com", "Subject", "Body") # Placeholder for recipient
                 print(f"\n✨ Generated Email:")
                 print(f"Subject: {email['subject']}")
                 print(f"Body:\n{email['body']}")
@@ -936,7 +1172,7 @@ def main():
                 # Simulate sending
                 recipient = input("\nEnter recipient email: ").strip()
                 if recipient and manager.validate_email(recipient):
-                    manager.record_sent_email(email, recipient)
+                    manager.record_sent_email(email['template_name'], recipient, email['subject'], email['body'])
                     print("✅ Email recorded as sent!")
                 else:
                     print("❌ Invalid email address!")
@@ -1384,6 +1620,99 @@ def main():
                 print("\n" + report)
         
         elif choice == '11':
+            print("\n📧 Email Scheduling & Reminder System")
+            print("1. Schedule new email")
+            print("2. View scheduled emails")
+            print("3. Cancel scheduled email")
+            print("4. Reschedule email")
+            print("5. View upcoming reminders")
+            print("6. Back to main menu")
+            
+            scheduling_choice = input("Choose option: ").strip()
+            
+            if scheduling_choice == '1':
+                templates = manager.list_templates()
+                if not templates:
+                    print("❌ No templates available to schedule!")
+                    continue
+                
+                print("\n📝 Available templates:")
+                for i, template_name in enumerate(templates, 1):
+                    template = manager.get_template(template_name)
+                    print(f"{i}. {template_name} ({template.get('category', 'custom')})")
+                
+                template_choice = input("\nChoose template for scheduling: ").strip()
+                if not template_choice.isdigit() or not (1 <= int(template_choice) <= len(templates)):
+                    print("❌ Invalid choice!")
+                    continue
+                
+                template_name = templates[int(template_choice) - 1]
+                
+                recipient = input("Enter recipient email: ").strip()
+                if not recipient or not manager.validate_email(recipient):
+                    print("❌ Invalid recipient email!")
+                    continue
+                
+                scheduled_time_str = input("Enter scheduled time (YYYY-MM-DDTHH:MM:SS): ").strip()
+                if not scheduled_time_str:
+                    print("❌ Scheduled time is required!")
+                    continue
+                
+                reminder_hours = input("Set reminder hours before scheduled time (default: 24): ").strip()
+                reminder_hours = int(reminder_hours) if reminder_hours.isdigit() else 24
+                
+                try:
+                    manager.schedule_email(template_name, recipient, scheduled_time_str)
+                    print(f"✅ Email '{template_name}' scheduled for {scheduled_time_str} with {reminder_hours} hour reminder.")
+                except Exception as e:
+                    print(f"❌ Error scheduling email: {e}")
+            
+            elif scheduling_choice == '2':
+                scheduled_emails = manager.get_scheduled_emails()
+                if not scheduled_emails:
+                    print("❌ No scheduled emails found.")
+                    continue
+                
+                print(f"\n📋 Scheduled Emails ({len(scheduled_emails)}):")
+                for i, email in enumerate(scheduled_emails, 1):
+                    status = email['status']
+                    reminder_hours = email.get('reminder_hours', 'N/A')
+                    print(f"{i}. {email['id']} - {email['recipient_email']} ({email['scheduled_time']}) - Status: {status} (Reminder: {reminder_hours}h)")
+                    if email.get('custom_message'):
+                        print(f"   Custom Message: {email['custom_message']}")
+                    if email.get('error'):
+                        print(f"   Error: {email['error']}")
+                    print()
+                
+                email_id_to_cancel = input("Enter ID of email to cancel (or press Enter to skip): ").strip()
+                if email_id_to_cancel:
+                    if manager.cancel_scheduled_email(email_id_to_cancel):
+                        print(f"✅ Email '{email_id_to_cancel}' cancelled.")
+                    else:
+                        print(f"❌ Email '{email_id_to_cancel}' not found or already cancelled.")
+                
+                email_id_to_reschedule = input("Enter ID of email to reschedule (or press Enter to skip): ").strip()
+                if email_id_to_reschedule:
+                    new_time_str = input("Enter new scheduled time (YYYY-MM-DDTHH:MM:SS): ").strip()
+                    if new_time_str:
+                        if manager.reschedule_email(email_id_to_reschedule, new_time_str):
+                            print(f"✅ Email '{email_id_to_reschedule}' rescheduled to {new_time_str}.")
+                        else:
+                            print(f"❌ Failed to reschedule email '{email_id_to_reschedule}'.")
+                    else:
+                        print("❌ New scheduled time is required.")
+            
+            elif scheduling_choice == '3':
+                scheduled_emails = manager.get_scheduled_emails()
+                if not scheduled_emails:
+                    print("❌ No scheduled emails to view reminders for.")
+                    continue
+                
+                print(f"\n📋 Upcoming Reminders ({len(manager.get_upcoming_reminders())}):")
+                for i, reminder in enumerate(manager.get_upcoming_reminders(), 1):
+                    print(f"{i}. {reminder['message']} ({reminder['reminder_time']})")
+        
+        elif choice == '12':
             print("👋 Thanks for using Email Template Manager!")
             break
         
