@@ -251,6 +251,161 @@ Best regards,
             return True
         return False
     
+    def export_templates(self, filename: str = None, include_contacts: bool = False) -> str:
+        """Export templates to a JSON file"""
+        if not filename:
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            filename = f'email_templates_backup_{timestamp}.json'
+        
+        export_data = {
+            'export_info': {
+                'exported_at': datetime.now().isoformat(),
+                'total_templates': len(self.templates),
+                'version': '1.0'
+            },
+            'templates': self.templates
+        }
+        
+        if include_contacts:
+            export_data['contacts'] = self.contacts
+            export_data['export_info']['total_contacts'] = len(self.contacts)
+        
+        try:
+            with open(filename, 'w') as f:
+                json.dump(export_data, f, indent=2)
+            self.logger.info(f"Exported {len(self.templates)} templates to {filename}")
+            return filename
+        except Exception as e:
+            self.logger.error(f"Failed to export templates: {e}")
+            raise
+    
+    def import_templates(self, filename: str, overwrite: bool = False) -> Dict:
+        """Import templates from a JSON file"""
+        try:
+            with open(filename, 'r') as f:
+                import_data = json.load(f)
+            
+            imported_count = 0
+            skipped_count = 0
+            overwritten_count = 0
+            
+            if 'templates' not in import_data:
+                raise ValueError("Invalid backup file: no templates found")
+            
+            for template_name, template_data in import_data['templates'].items():
+                if template_name in self.templates and not overwrite:
+                    skipped_count += 1
+                    continue
+                
+                if template_name in self.templates and overwrite:
+                    overwritten_count += 1
+                
+                self.templates[template_name] = template_data
+                imported_count += 1
+            
+            # Import contacts if available
+            if 'contacts' in import_data and import_data['contacts']:
+                for contact_name, contact_data in import_data['contacts'].items():
+                    if contact_name not in self.contacts or overwrite:
+                        self.contacts[contact_name] = contact_data
+            
+            self.save_templates()
+            self.save_contacts()
+            
+            self.logger.info(f"Imported {imported_count} templates, skipped {skipped_count}, overwritten {overwritten_count}")
+            
+            return {
+                'imported': imported_count,
+                'skipped': skipped_count,
+                'overwritten': overwritten_count,
+                'export_info': import_data.get('export_info', {})
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Failed to import templates: {e}")
+            raise
+    
+    def create_backup(self) -> str:
+        """Create a complete backup of all data"""
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        backup_dir = Path('backups')
+        backup_dir.mkdir(exist_ok=True)
+        
+        backup_data = {
+            'backup_info': {
+                'created_at': datetime.now().isoformat(),
+                'total_templates': len(self.templates),
+                'total_contacts': len(self.contacts),
+                'total_sent_emails': len(self.sent_emails)
+            },
+            'templates': self.templates,
+            'contacts': self.contacts,
+            'sent_emails': self.sent_emails
+        }
+        
+        backup_file = backup_dir / f'complete_backup_{timestamp}.json'
+        
+        try:
+            with open(backup_file, 'w') as f:
+                json.dump(backup_data, f, indent=2)
+            self.logger.info(f"Created complete backup: {backup_file}")
+            return str(backup_file)
+        except Exception as e:
+            self.logger.error(f"Failed to create backup: {e}")
+            raise
+    
+    def restore_from_backup(self, backup_file: str) -> bool:
+        """Restore all data from a backup file"""
+        try:
+            with open(backup_file, 'r') as f:
+                backup_data = json.load(f)
+            
+            if 'templates' in backup_data:
+                self.templates = backup_data['templates']
+                self.save_templates()
+            
+            if 'contacts' in backup_data:
+                self.contacts = backup_data['contacts']
+                self.save_contacts()
+            
+            if 'sent_emails' in backup_data:
+                self.sent_emails = backup_data['sent_emails']
+                self.save_sent_emails()
+            
+            self.logger.info(f"Restored from backup: {backup_file}")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Failed to restore from backup: {e}")
+            return False
+    
+    def list_backups(self) -> List[Dict]:
+        """List all available backup files"""
+        backup_dir = Path('backups')
+        if not backup_dir.exists():
+            return []
+        
+        backups = []
+        for backup_file in backup_dir.glob('complete_backup_*.json'):
+            try:
+                with open(backup_file, 'r') as f:
+                    backup_data = json.load(f)
+                
+                backup_info = backup_data.get('backup_info', {})
+                backups.append({
+                    'filename': backup_file.name,
+                    'path': str(backup_file),
+                    'created_at': backup_info.get('created_at'),
+                    'total_templates': backup_info.get('total_templates', 0),
+                    'total_contacts': backup_info.get('total_contacts', 0),
+                    'total_sent_emails': backup_info.get('total_sent_emails', 0),
+                    'size': backup_file.stat().st_size
+                })
+            except:
+                continue
+        
+        return sorted(backups, key=lambda x: x['created_at'], reverse=True)
+    
     def add_contact(self, name: str, email: str, company: str = '', notes: str = ''):
         """Add a new contact"""
         self.contacts[name] = {
@@ -422,9 +577,10 @@ def main():
         print("6. View email statistics")
         print("7. Generate report")
         print("8. Duplicate & Version Templates")
-        print("9. Exit")
+        print("9. Import/Export & Backup")
+        print("10. Exit")
         
-        choice = input("\nEnter your choice (1-9): ").strip()
+        choice = input("\nEnter your choice (1-10): ").strip()
         
         if choice == '1':
             print("\n📝 Creating new email template")
@@ -702,6 +858,136 @@ def main():
                     print("❌ Failed to update template version!")
         
         elif choice == '9':
+            print("\n📦 Import/Export & Backup System")
+            print("1. Export templates")
+            print("2. Import templates")
+            print("3. Create complete backup")
+            print("4. Restore from backup")
+            print("5. List available backups")
+            print("6. Back to main menu")
+            
+            backup_choice = input("Choose option: ").strip()
+            
+            if backup_choice == '1':
+                print("\n📤 Export Templates")
+                include_contacts = input("Include contacts in export? (y/n): ").lower().strip() == 'y'
+                custom_filename = input("Custom filename (or press Enter for auto-generated): ").strip()
+                
+                try:
+                    filename = manager.export_templates(custom_filename if custom_filename else None, include_contacts)
+                    print(f"✅ Templates exported successfully to: {filename}")
+                    if include_contacts:
+                        print(f"📋 Included {len(manager.contacts)} contacts")
+                except Exception as e:
+                    print(f"❌ Export failed: {e}")
+            
+            elif backup_choice == '2':
+                print("\n📥 Import Templates")
+                filename = input("Enter backup filename: ").strip()
+                
+                if not filename:
+                    print("❌ Filename is required!")
+                    continue
+                
+                if not Path(filename).exists():
+                    print("❌ File not found!")
+                    continue
+                
+                overwrite = input("Overwrite existing templates? (y/n): ").lower().strip() == 'y'
+                
+                try:
+                    result = manager.import_templates(filename, overwrite)
+                    print(f"✅ Import completed!")
+                    print(f"  Imported: {result['imported']} templates")
+                    print(f"  Skipped: {result['skipped']} templates")
+                    print(f"  Overwritten: {result['overwritten']} templates")
+                    
+                    if result['export_info']:
+                        exported_at = result['export_info'].get('exported_at')
+                        if exported_at:
+                            export_date = datetime.fromisoformat(exported_at).strftime('%Y-%m-%d %H:%M')
+                            print(f"  Original export date: {export_date}")
+                except Exception as e:
+                    print(f"❌ Import failed: {e}")
+            
+            elif backup_choice == '3':
+                print("\n💾 Creating Complete Backup...")
+                try:
+                    backup_file = manager.create_backup()
+                    print(f"✅ Complete backup created: {backup_file}")
+                    
+                    # Show backup info
+                    backup_info = {
+                        'templates': len(manager.templates),
+                        'contacts': len(manager.contacts),
+                        'sent_emails': len(manager.sent_emails)
+                    }
+                    print(f"📊 Backup contains:")
+                    print(f"  Templates: {backup_info['templates']}")
+                    print(f"  Contacts: {backup_info['contacts']}")
+                    print(f"  Sent emails: {backup_info['sent_emails']}")
+                except Exception as e:
+                    print(f"❌ Backup failed: {e}")
+            
+            elif backup_choice == '4':
+                print("\n🔄 Restore from Backup")
+                backups = manager.list_backups()
+                
+                if not backups:
+                    print("❌ No backup files found!")
+                    continue
+                
+                print(f"\n📋 Available backups ({len(backups)}):")
+                for i, backup in enumerate(backups, 1):
+                    created_date = datetime.fromisoformat(backup['created_at']).strftime('%Y-%m-%d %H:%M')
+                    size_kb = backup['size'] / 1024
+                    print(f"{i}. {backup['filename']}")
+                    print(f"   Created: {created_date}")
+                    print(f"   Templates: {backup['total_templates']}, Contacts: {backup['total_contacts']}")
+                    print(f"   Size: {size_kb:.1f} KB")
+                    print()
+                
+                backup_choice = input("Choose backup to restore (or press Enter to cancel): ").strip()
+                if not backup_choice.isdigit() or not (1 <= int(backup_choice) <= len(backups)):
+                    print("❌ Invalid choice!")
+                    continue
+                
+                selected_backup = backups[int(backup_choice) - 1]
+                confirm = input(f"⚠️  This will overwrite all current data. Continue? (y/n): ").lower().strip()
+                
+                if confirm == 'y':
+                    if manager.restore_from_backup(selected_backup['path']):
+                        print("✅ Restore completed successfully!")
+                        print(f"📊 Restored data:")
+                        print(f"  Templates: {selected_backup['total_templates']}")
+                        print(f"  Contacts: {selected_backup['total_contacts']}")
+                        print(f"  Sent emails: {selected_backup['total_sent_emails']}")
+                    else:
+                        print("❌ Restore failed!")
+                else:
+                    print("🔄 Restore cancelled.")
+            
+            elif backup_choice == '5':
+                print("\n📋 Available Backups")
+                backups = manager.list_backups()
+                
+                if not backups:
+                    print("❌ No backup files found!")
+                    continue
+                
+                print(f"\n📦 Found {len(backups)} backup(s):")
+                for i, backup in enumerate(backups, 1):
+                    created_date = datetime.fromisoformat(backup['created_at']).strftime('%Y-%m-%d %H:%M')
+                    size_kb = backup['size'] / 1024
+                    print(f"{i}. {backup['filename']}")
+                    print(f"   📅 Created: {created_date}")
+                    print(f"   📊 Templates: {backup['total_templates']}")
+                    print(f"   👥 Contacts: {backup['total_contacts']}")
+                    print(f"   📧 Sent emails: {backup['total_sent_emails']}")
+                    print(f"   💾 Size: {size_kb:.1f} KB")
+                    print()
+        
+        elif choice == '10':
             print("👋 Thanks for using Email Template Manager!")
             break
         
