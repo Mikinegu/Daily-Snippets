@@ -204,6 +204,53 @@ Best regards,
             return True
         return False
     
+    def duplicate_template(self, original_name: str, new_name: str) -> Optional[Dict]:
+        """Duplicate an existing template with a new name"""
+        original_template = self.get_template(original_name)
+        if not original_template:
+            return None
+        
+        # Create a copy of the template
+        new_template = original_template.copy()
+        new_template['duplicated_from'] = original_name
+        new_template['created_at'] = datetime.now().isoformat()
+        new_template['version'] = 1
+        
+        # Add version to original template if not present
+        if 'version' not in original_template:
+            original_template['version'] = 1
+            self.save_templates()
+        
+        self.templates[new_name] = new_template
+        self.save_templates()
+        self.logger.info(f"Duplicated template '{original_name}' to '{new_name}'")
+        return new_template
+    
+    def get_template_versions(self, base_name: str) -> List[Dict]:
+        """Get all versions of a template"""
+        versions = []
+        for name, template in self.templates.items():
+            if name == base_name or template.get('duplicated_from') == base_name:
+                versions.append({
+                    'name': name,
+                    'version': template.get('version', 1),
+                    'created_at': template.get('created_at'),
+                    'is_original': name == base_name
+                })
+        
+        return sorted(versions, key=lambda x: x['version'])
+    
+    def update_template_version(self, name: str) -> bool:
+        """Increment version number of a template"""
+        if name in self.templates:
+            current_version = self.templates[name].get('version', 1)
+            self.templates[name]['version'] = current_version + 1
+            self.templates[name]['last_updated'] = datetime.now().isoformat()
+            self.save_templates()
+            self.logger.info(f"Updated version of template '{name}' to {current_version + 1}")
+            return True
+        return False
+    
     def add_contact(self, name: str, email: str, company: str = '', notes: str = ''):
         """Add a new contact"""
         self.contacts[name] = {
@@ -374,9 +421,10 @@ def main():
         print("5. Get template suggestions")
         print("6. View email statistics")
         print("7. Generate report")
-        print("8. Exit")
+        print("8. Duplicate & Version Templates")
+        print("9. Exit")
         
-        choice = input("\nEnter your choice (1-8): ").strip()
+        choice = input("\nEnter your choice (1-9): ").strip()
         
         if choice == '1':
             print("\n📝 Creating new email template")
@@ -557,6 +605,103 @@ def main():
             print("\n" + manager.generate_report())
         
         elif choice == '8':
+            print("\n📋 Template Duplication & Versioning")
+            print("1. Duplicate template")
+            print("2. View template versions")
+            print("3. Update template version")
+            print("4. Back to main menu")
+            
+            version_choice = input("Choose option: ").strip()
+            
+            if version_choice == '1':
+                templates = manager.list_templates()
+                if not templates:
+                    print("❌ No templates available to duplicate!")
+                    continue
+                
+                print("\n📝 Available templates:")
+                for i, template_name in enumerate(templates, 1):
+                    template = manager.get_template(template_name)
+                    version = template.get('version', 1)
+                    print(f"{i}. {template_name} (v{version})")
+                
+                template_choice = input("\nChoose template to duplicate: ").strip()
+                if not template_choice.isdigit() or not (1 <= int(template_choice) <= len(templates)):
+                    print("❌ Invalid choice!")
+                    continue
+                
+                original_name = templates[int(template_choice) - 1]
+                new_name = input(f"Enter new name for '{original_name}': ").strip()
+                
+                if not new_name:
+                    print("❌ New name is required!")
+                    continue
+                
+                if new_name in manager.templates:
+                    print("❌ Template with that name already exists!")
+                    continue
+                
+                duplicated = manager.duplicate_template(original_name, new_name)
+                if duplicated:
+                    print(f"✅ Template '{original_name}' duplicated to '{new_name}'!")
+                    print(f"Version: {duplicated.get('version', 1)}")
+                else:
+                    print("❌ Failed to duplicate template!")
+            
+            elif version_choice == '2':
+                templates = manager.list_templates()
+                if not templates:
+                    print("❌ No templates available!")
+                    continue
+                
+                print("\n📝 Available templates:")
+                for i, template_name in enumerate(templates, 1):
+                    template = manager.get_template(template_name)
+                    version = template.get('version', 1)
+                    print(f"{i}. {template_name} (v{version})")
+                
+                template_choice = input("\nChoose template to view versions: ").strip()
+                if not template_choice.isdigit() or not (1 <= int(template_choice) <= len(templates)):
+                    print("❌ Invalid choice!")
+                    continue
+                
+                template_name = templates[int(template_choice) - 1]
+                versions = manager.get_template_versions(template_name)
+                
+                if len(versions) == 1:
+                    print(f"\n📋 Template '{template_name}' has only one version (v{versions[0]['version']})")
+                else:
+                    print(f"\n📋 Versions of '{template_name}':")
+                    for version_info in versions:
+                        status = "Original" if version_info['is_original'] else "Duplicate"
+                        created = datetime.fromisoformat(version_info['created_at']).strftime('%Y-%m-%d %H:%M')
+                        print(f"  {version_info['name']} - v{version_info['version']} ({status}) - {created}")
+            
+            elif version_choice == '3':
+                templates = manager.list_templates()
+                if not templates:
+                    print("❌ No templates available!")
+                    continue
+                
+                print("\n📝 Available templates:")
+                for i, template_name in enumerate(templates, 1):
+                    template = manager.get_template(template_name)
+                    version = template.get('version', 1)
+                    print(f"{i}. {template_name} (v{version})")
+                
+                template_choice = input("\nChoose template to update version: ").strip()
+                if not template_choice.isdigit() or not (1 <= int(template_choice) <= len(templates)):
+                    print("❌ Invalid choice!")
+                    continue
+                
+                template_name = templates[int(template_choice) - 1]
+                if manager.update_template_version(template_name):
+                    new_version = manager.get_template(template_name).get('version', 1)
+                    print(f"✅ Template '{template_name}' updated to version {new_version}!")
+                else:
+                    print("❌ Failed to update template version!")
+        
+        elif choice == '9':
             print("👋 Thanks for using Email Template Manager!")
             break
         
