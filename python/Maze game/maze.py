@@ -14,7 +14,6 @@ def shortest_path(maze):
     start, end = find_start_end(maze)
     if not start or not end:
         return []
-
     rows, cols = len(maze), len(maze[0])
     visited = set()
     queue = deque([(start, [start])])  # (current_pos, path_so_far)
@@ -32,7 +31,6 @@ def shortest_path(maze):
                 queue.append(((nr, nc), path + [(nr, nc)]))
     
     return []  # No path found
-
 # 🧪 Test it
 maze = [
     ['S', '.', '.', '#', '.', '.'],
