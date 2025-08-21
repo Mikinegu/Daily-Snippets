@@ -12,7 +12,8 @@ mp_hands = mp.solutions.hands
 hands = mp_hands.Hands(min_detection_confidence=0.7, min_tracking_confidence=0.7)
 mp_draw = mp.solutions.drawing_utils
 
-cap = cv2.VideoCapture(0)
+cap = cv2.VideoCapture(0) 
+#
 
 finger_tips = [8, 12, 16, 20]  # Index, Middle, Ring, Pinky
 thumb_tip = 4
