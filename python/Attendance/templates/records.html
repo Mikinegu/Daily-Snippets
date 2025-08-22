@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Attendance Records</title>
+</head>
+<body>
+  <h2>All Submitted Student IDs</h2>
+  <table border="1" cellpadding="8">
+    <tr>
+      <th>ID</th>
+      <th>Student ID</th>
+      <th>Name</th>
+    </tr>
+    {% for row in students %}
+    <tr>
+      <td>{{ row[0] }}</td>
+      <td>{{ row[1] }}</td>
+      <td>{{ row[2] }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  <br>
+  <a href="/">Back to Form</a>
+</body>
+</html>
