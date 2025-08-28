@@ -2,13 +2,14 @@
 
 # Improved CSV to Excel Automation using pandas
 
+
 import pandas as pd
 import sys
 import os
 import glob
 from datetime import datetime
 
-def convert_folder_csvs_to_excel(folder_path, excel_path, log_path):
+def convert_folder_csvs_to_excel(folder_path, excel_path, log_path, filter_keyword=None):
 	csv_files = glob.glob(os.path.join(folder_path, '*.csv'))
 	if not csv_files:
 		print(f"No CSV files found in '{folder_path}'.")
@@ -18,9 +19,13 @@ def convert_folder_csvs_to_excel(folder_path, excel_path, log_path):
 		for csv_file in csv_files:
 			try:
 				df = pd.read_csv(csv_file)
+				if filter_keyword:
+					filtered_cols = [col for col in df.columns if filter_keyword.lower() in col.lower()]
+					if filtered_cols:
+						df = df[filtered_cols]
 				sheet_name = os.path.splitext(os.path.basename(csv_file))[0][:31]  # Excel sheet name max length 31
 				df.to_excel(writer, sheet_name=sheet_name, index=False)
-				log_entries.append(f"SUCCESS: {csv_file} -> {sheet_name}")
+				log_entries.append(f"SUCCESS: {csv_file} -> {sheet_name} | Rows: {df.shape[0]}, Cols: {df.shape[1]}")
 			except Exception as e:
 				log_entries.append(f"FAIL: {csv_file} - {e}")
 	# Write log
@@ -30,11 +35,23 @@ def convert_folder_csvs_to_excel(folder_path, excel_path, log_path):
 			log_file.write(entry + '\n')
 	print(f"Conversion complete. See log: {log_path}")
 
+def interactive_mode():
+	print("Interactive CSV to Excel Converter")
+	folder = input("Enter folder containing CSV files: ").strip()
+	excel_file = input("Enter output Excel file name (e.g., output.xlsx): ").strip()
+	log_file = input("Enter log file name (e.g., conversion.log): ").strip()
+	filter_keyword = input("Enter column filter keyword (optional, press Enter to skip): ").strip()
+	filter_keyword = filter_keyword if filter_keyword else None
+	convert_folder_csvs_to_excel(folder, excel_file, log_file, filter_keyword)
+
 if __name__ == "__main__":
-	if len(sys.argv) != 4:
-		print("Usage: python auto10.py <csv_folder> <output_excel> <log_file>")
-	else:
+	if len(sys.argv) == 1:
+		interactive_mode()
+	elif 4 <= len(sys.argv) <= 5:
 		folder = sys.argv[1]
 		excel_file = sys.argv[2]
 		log_file = sys.argv[3]
-		convert_folder_csvs_to_excel(folder, excel_file, log_file)
+		filter_keyword = sys.argv[4] if len(sys.argv) == 5 else None
+		convert_folder_csvs_to_excel(folder, excel_file, log_file, filter_keyword)
+	else:
+		print("Usage: python auto10.py <csv_folder> <output_excel> <log_file> [filter_keyword]")
