@@ -11,7 +11,7 @@ from datetime import datetime
 from tqdm import tqdm
 import time
 
-def convert_folder_csvs_to_excel(folder_path, excel_path, log_path, filter_keyword=None):
+def convert_folder_csvs_to_excel(folder_path, excel_path, log_path, filter_keyword=None, delimiter=',', encoding='utf-8'):
 	csv_files = glob.glob(os.path.join(folder_path, '*.csv'))
 	if not csv_files:
 		print(f"No CSV files found in '{folder_path}'.")
@@ -22,7 +22,7 @@ def convert_folder_csvs_to_excel(folder_path, excel_path, log_path, filter_keywo
 			max_retries = 3
 			for attempt in range(max_retries):
 				try:
-					df = pd.read_csv(csv_file)
+					df = pd.read_csv(csv_file, delimiter=delimiter, encoding=encoding)
 					if filter_keyword:
 						filtered_cols = [col for col in df.columns if filter_keyword.lower() in col.lower()]
 						if filtered_cols:
@@ -50,16 +50,22 @@ def interactive_mode():
 	log_file = input("Enter log file name (e.g., conversion.log): ").strip()
 	filter_keyword = input("Enter column filter keyword (optional, press Enter to skip): ").strip()
 	filter_keyword = filter_keyword if filter_keyword else None
-	convert_folder_csvs_to_excel(folder, excel_file, log_file, filter_keyword)
+	delimiter = input("Enter CSV delimiter (default is comma ','): ").strip()
+	delimiter = delimiter if delimiter else ','
+	encoding = input("Enter file encoding (default is utf-8): ").strip()
+	encoding = encoding if encoding else 'utf-8'
+	convert_folder_csvs_to_excel(folder, excel_file, log_file, filter_keyword, delimiter, encoding)
 
 if __name__ == "__main__":
 	if len(sys.argv) == 1:
 		interactive_mode()
-	elif 4 <= len(sys.argv) <= 5:
+	elif 4 <= len(sys.argv) <= 6:
 		folder = sys.argv[1]
 		excel_file = sys.argv[2]
 		log_file = sys.argv[3]
-		filter_keyword = sys.argv[4] if len(sys.argv) == 5 else None
-		convert_folder_csvs_to_excel(folder, excel_file, log_file, filter_keyword)
+		filter_keyword = sys.argv[4] if len(sys.argv) > 4 else None
+		delimiter = sys.argv[5] if len(sys.argv) > 5 else ','
+		encoding = sys.argv[6] if len(sys.argv) > 6 else 'utf-8'
+		convert_folder_csvs_to_excel(folder, excel_file, log_file, filter_keyword, delimiter, encoding)
 	else:
-		print("Usage: python auto10.py <csv_folder> <output_excel> <log_file> [filter_keyword]")
+		print("Usage: python auto10.py <csv_folder> <output_excel> <log_file> [filter_keyword] [delimiter] [encoding]")
