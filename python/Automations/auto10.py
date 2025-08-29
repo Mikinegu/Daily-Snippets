@@ -8,6 +8,7 @@ import sys
 import os
 import glob
 from datetime import datetime
+from tqdm import tqdm
 
 def convert_folder_csvs_to_excel(folder_path, excel_path, log_path, filter_keyword=None):
 	csv_files = glob.glob(os.path.join(folder_path, '*.csv'))
@@ -16,7 +17,7 @@ def convert_folder_csvs_to_excel(folder_path, excel_path, log_path, filter_keywo
 		return
 	with pd.ExcelWriter(excel_path) as writer:
 		log_entries = []
-		for csv_file in csv_files:
+		for csv_file in tqdm(csv_files, desc="Converting CSVs", unit="file"):
 			try:
 				df = pd.read_csv(csv_file)
 				if filter_keyword:
