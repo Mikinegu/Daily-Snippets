@@ -9,6 +9,7 @@ import os
 import glob
 from datetime import datetime
 from tqdm import tqdm
+import time
 
 def convert_folder_csvs_to_excel(folder_path, excel_path, log_path, filter_keyword=None):
 	csv_files = glob.glob(os.path.join(folder_path, '*.csv'))
@@ -18,17 +19,23 @@ def convert_folder_csvs_to_excel(folder_path, excel_path, log_path, filter_keywo
 	with pd.ExcelWriter(excel_path) as writer:
 		log_entries = []
 		for csv_file in tqdm(csv_files, desc="Converting CSVs", unit="file"):
-			try:
-				df = pd.read_csv(csv_file)
-				if filter_keyword:
-					filtered_cols = [col for col in df.columns if filter_keyword.lower() in col.lower()]
-					if filtered_cols:
-						df = df[filtered_cols]
-				sheet_name = os.path.splitext(os.path.basename(csv_file))[0][:31]  # Excel sheet name max length 31
-				df.to_excel(writer, sheet_name=sheet_name, index=False)
-				log_entries.append(f"SUCCESS: {csv_file} -> {sheet_name} | Rows: {df.shape[0]}, Cols: {df.shape[1]}")
-			except Exception as e:
-				log_entries.append(f"FAIL: {csv_file} - {e}")
+			max_retries = 3
+			for attempt in range(max_retries):
+				try:
+					df = pd.read_csv(csv_file)
+					if filter_keyword:
+						filtered_cols = [col for col in df.columns if filter_keyword.lower() in col.lower()]
+						if filtered_cols:
+							df = df[filtered_cols]
+					sheet_name = os.path.splitext(os.path.basename(csv_file))[0][:31]  # Excel sheet name max length 31
+					df.to_excel(writer, sheet_name=sheet_name, index=False)
+					log_entries.append(f"SUCCESS: {csv_file} -> {sheet_name} | Rows: {df.shape[0]}, Cols: {df.shape[1]}")
+					break  # Success, exit retry loop
+				except Exception as e:
+					if attempt < max_retries - 1:
+						time.sleep(1)  # Wait 1 second before retry
+					else:
+						log_entries.append(f"FAIL: {csv_file} - {e} (after {max_retries} attempts)")
 	# Write log
 	with open(log_path, 'a', encoding='utf-8') as log_file:
 		log_file.write(f"\nRun at {datetime.now()}\n")
