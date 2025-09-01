@@ -10,7 +10,7 @@ def scrape_headlines(url):
 	return headlines
 
 if __name__ == "__main__":
-	url = "https://news.ycombinator.com/"  # Example site
+	url = "https://news.ycombinator.com/"  
 	headlines = scrape_headlines(url)
 	print("Headlines:")
 	for headline in headlines:
