@@ -2,16 +2,23 @@
 import requests
 from bs4 import BeautifulSoup
 
+
 def scrape_headlines(url):
-	response = requests.get(url)
+	try:
+		response = requests.get(url, timeout=10)
+		response.raise_for_status()
+	except requests.RequestException as e:
+		print(f"Error fetching {url}: {e}")
+		return []
 	soup = BeautifulSoup(response.text, 'html.parser')
-	# Example: find all <h2> tags (common for headlines)
 	headlines = [h2.get_text(strip=True) for h2 in soup.find_all('h2')]
 	return headlines
 
 if __name__ == "__main__":
-	url = "https://news.ycombinator.com/"  
+	url = input("Enter the URL to scrape headlines from (default: https://news.ycombinator.com/): ").strip()
+	if not url:
+		url = "https://news.ycombinator.com/"
 	headlines = scrape_headlines(url)
-	print("Headlines:")
+	print(f"\nFound {len(headlines)} headlines:")
 	for headline in headlines:
 		print("-", headline)
