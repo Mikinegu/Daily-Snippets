@@ -1,0 +1,23 @@
+# Smart File Organizer Dependencies
+# Install with: pip install -r requirements_auto13.txt
+
+# Core dependencies
+psutil>=5.9.0
+schedule>=1.2.0
+watchdog>=3.0.0
+
+# File type detection
+python-magic>=0.4.27
+python-magic-bin>=0.4.14  # Windows version
+
+# Image processing and metadata
+Pillow>=9.0.0
+exifread>=3.0.0
+opencv-python>=4.6.0
+
+# Archive handling
+zipfile38>=0.0.3
+
+# Optional: For advanced features
+# numpy>=1.21.0  # Already included with opencv-python
+# requests>=2.28.0  # For web-based file type detection
