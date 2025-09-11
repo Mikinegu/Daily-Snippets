@@ -1,0 +1,25 @@
+# Text File Analyzer Requirements
+# Core dependencies for text analysis functionality
+
+# No external dependencies required!
+# This project uses only Python standard library modules:
+# - os, re, argparse, json, datetime, pathlib, math
+# - collections.Counter
+# - threading (for future enhancements)
+
+# Optional dependencies for enhanced functionality:
+# Uncomment the following if you want additional features:
+
+# For better file type detection:
+# python-magic==0.4.27
+
+# For advanced text processing:
+# nltk==3.8.1
+# textstat==0.7.3
+
+# For GUI interface (future enhancement):
+# tkinter  # Usually included with Python
+
+# For web interface (future enhancement):
+# flask==2.3.3
+# streamlit==1.28.1
