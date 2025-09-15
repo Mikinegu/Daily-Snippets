@@ -1,0 +1,4 @@
+{
+  "bot_token": "YOUR_BOT_TOKEN_HERE",
+  "instructions": "Replace YOUR_BOT_TOKEN_HERE with your actual Telegram bot token from @BotFather"
+}
